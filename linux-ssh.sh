@@ -1,4 +1,5 @@
 #!/bin/bash
+# SSH-only FreeVPS
 # Required secrets:
 # NGROK_AUTH_TOKEN
 # LINUX_USER_PASSWORD
