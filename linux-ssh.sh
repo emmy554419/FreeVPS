@@ -41,13 +41,27 @@ ngrok config add-authtoken "$NGROK_AUTH_TOKEN"
 
 echo "### Start ngrok TCP tunnel for SSH (port 22) ###"
 rm -f ngrok.log
-ngrok tcp 22 --log=stdout > ngrok.log &
 
-sleep 8
+# Start ngrok in background
+nohup ngrok tcp 22 --log=stdout > ngrok.log 2>&1 &
 
-echo ""
-echo "=========================================="
-echo "SSH CONNECTION COMMAND:"
-grep -oE "tcp://[a-z0-9\.]+:[0-9]+" ngrok.log | \
-sed "s#tcp://#ssh runner@#; s#:# -p #"
-echo "=========================================="
+# Wait until ngrok writes the tunnel info
+TRIES=0
+MAX_TRIES=10
+NGROK_SSH=""
+while [[ -z "$NGROK_SSH" && $TRIES -lt $MAX_TRIES ]]; do
+  sleep 2
+  NGROK_SSH=$(grep -oE "tcp://[a-z0-9\.]+:[0-9]+" ngrok.log | head -n1)
+  TRIES=$((TRIES+1))
+done
+
+if [[ -n "$NGROK_SSH" ]]; then
+  echo ""
+  echo "=========================================="
+  echo "SSH CONNECTION COMMAND:"
+  echo "$NGROK_SSH" | sed "s#tcp://#ssh $USER@#; s#:# -p #"
+  echo "=========================================="
+else
+  echo "⚠️ Could not detect SSH link from ngrok after $((TRIES*2)) seconds"
+  exit 4
+fi
