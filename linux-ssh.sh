@@ -50,7 +50,7 @@ TRIES=0
 MAX_TRIES=10
 NGROK_SSH=""
 while [[ -z "$NGROK_SSH" && $TRIES -lt $MAX_TRIES ]]; do
-  sleep 2
+  sleep 10
   NGROK_SSH=$(grep -oE "tcp://[a-z0-9\.]+:[0-9]+" ngrok.log | head -n1)
   TRIES=$((TRIES+1))
 done
