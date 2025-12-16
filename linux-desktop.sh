@@ -38,9 +38,11 @@ fi
 
 echo "### Install ngrok ###"
 
-wget -q https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-386.zip
-unzip ngrok-stable-linux-386.zip
-chmod +x ./ngrok
+# Install ngrok v3 (latest)
+wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.zip
+unzip ngrok-v3-stable-linux-amd64.zip
+chmod +x ngrok
+sudo mv ngrok /usr/local/bin/ngrok
 
 echo "### Update user: $USER password ###"
 echo -e "$LINUX_USER_PASSWORD\n$LINUX_USER_PASSWORD" | sudo passwd "$USER"
