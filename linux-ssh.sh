@@ -65,3 +65,5 @@ else
   echo "⚠️ Could not detect SSH link from ngrok after $((TRIES*2)) seconds"
   exit 4
 fi
+echo "### Keeping runner alive for SSH access (CTRL+C to stop) ###"
+sleep infinity
