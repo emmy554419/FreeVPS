@@ -1,4 +1,4 @@
-name: Ubuntu ssh Virtual Machine
+name: Free Ubuntu SSH VM
 on: 
   workflow_dispatch:
 defaults:
@@ -14,14 +14,11 @@ jobs:
       - name: Preparing Linux Environment
         run: sudo apt-get update
 
-      - name: Setting Up the Ubuntu Environment
+      - name: Setting Up Ubuntu SSH
         run: bash linux-ssh.sh
         env:
           LINUX_USER_PASSWORD: ${{ secrets.LINUX_USER_PASSWORD }}
-          CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}   # <-- THIS IS THE KEY
-          LINUX_MACHINE_NAME: ${{ secrets.LINUX_MACHINE_NAME }}
-          LINUX_USERNAME: ${{ secrets.LINUX_USERNAME }}
-          CHROME_HEADLESS_CODE: ${{ secrets.CHROME_HEADLESS_CODE }}
+          LINUX_MACHINE_NAME: FreeVPS   # optional name
 
-      - name: Keep Running Ubuntu System and keepAlive
+      - name: Keep Runner Alive
         run: sleep infinity
