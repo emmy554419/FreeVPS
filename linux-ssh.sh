@@ -1,5 +1,5 @@
 #!/bin/bash
-# SSH-only FreeVPS (Hardened for GitHub Actions)
+# SSH-only FreeVPS (FINAL FIXED VERSION)
 # Required secrets:
 # NGROK_AUTH_TOKEN
 # LINUX_USER_PASSWORD
@@ -13,12 +13,12 @@ USER="runner"
 echo "### Checking required secrets ###"
 
 if [[ -z "$NGROK_AUTH_TOKEN" ]]; then
-  echo "Please set 'NGROK_AUTH_TOKEN'"
+  echo "❌ Please set 'NGROK_AUTH_TOKEN'"
   exit 2
 fi
 
 if [[ -z "$LINUX_USER_PASSWORD" ]]; then
-  echo "Please set 'LINUX_USER_PASSWORD'"
+  echo "❌ Please set 'LINUX_USER_PASSWORD'"
   exit 3
 fi
 
@@ -46,15 +46,15 @@ ngrok config add-authtoken "$NGROK_AUTH_TOKEN"
 echo "### Start ngrok TCP tunnel for SSH (port 22) ###"
 rm -f ngrok.log
 
-# Start ngrok in background with fixed region (IMPORTANT)
+# Start ngrok in background with FIXED region
 nohup ngrok tcp 22 --region=eu --log=stdout > ngrok.log 2>&1 &
 
 TRIES=0
-MAX_TRIES=20
+MAX_TRIES=30
 NGROK_HOST=""
 NGROK_PORT=""
 
-while [[ -z "$NGROK_HOST" && $TRIES -lt $MAX_TRIES ]]; do
+while [[ $TRIES -lt $MAX_TRIES ]]; do
   sleep 5
 
   LINE=$(grep -oE "tcp://[a-z0-9\.]+:[0-9]+" ngrok.log | head -n1)
@@ -63,27 +63,31 @@ while [[ -z "$NGROK_HOST" && $TRIES -lt $MAX_TRIES ]]; do
     HOST=$(echo "$LINE" | sed 's#tcp://##' | cut -d: -f1)
     PORT=$(echo "$LINE" | cut -d: -f2)
 
-    # Confirm DNS is actually resolvable before accepting it
-    if getent hosts "$HOST" > /dev/null; then
-      NGROK_HOST="$HOST"
-      NGROK_PORT="$PORT"
+    # Validate PORT is numeric
+    if [[ "$PORT" =~ ^[0-9]+$ ]]; then
+      # Validate DNS resolves
+      if getent hosts "$HOST" > /dev/null; then
+        NGROK_HOST="$HOST"
+        NGROK_PORT="$PORT"
+        break
+      fi
     fi
   fi
 
-  TRIES=$((TRIES+1))
+  TRIES=$((TRIES + 1))
 done
 
-if [[ -n "$NGROK_HOST" ]]; then
-  echo ""
-  echo "=========================================="
-  echo "SSH CONNECTION COMMAND:"
-  echo "ssh $USER@$NGROK_HOST -p $NGROK_PORT"
-  echo "=========================================="
-else
-  echo "❌ ngrok tunnel started but DNS never propagated"
+if [[ -z "$NGROK_HOST" || -z "$NGROK_PORT" ]]; then
+  echo "❌ Failed to obtain a valid ngrok SSH endpoint"
   echo "Check ngrok.log for details"
   exit 4
 fi
+
+echo ""
+echo "=========================================="
+echo "SSH CONNECTION COMMAND:"
+echo "ssh $USER@$NGROK_HOST -p $NGROK_PORT"
+echo "=========================================="
 
 echo "### Keeping runner alive for SSH access ###"
 sleep infinity
