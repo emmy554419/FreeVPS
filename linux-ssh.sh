@@ -29,15 +29,25 @@ chmod +x cloudflared-linux-amd64
 sudo mv cloudflared-linux-amd64 /usr/local/bin/cloudflared
 
 echo "### Start Cloudflare Tunnel for SSH (public trycloudflare.com) ###"
-# Start tunnel in background, public hostname
+# Start tunnel in background
 nohup cloudflared tunnel --url ssh://localhost:22 > cloudflared.log 2>&1 &
 
-# Wait for tunnel to start
-sleep 10
+# Wait until tunnel prints a valid hostname
+TRIES=0
+MAX_TRIES=15
+PUBLIC_HOST=""
 
-# Get the public hostname
-PUBLIC_HOST=$(grep -oP 'https://\K[^\s]+' cloudflared.log | head -n1)
-PUBLIC_HOST=${PUBLIC_HOST%%:*}  # remove port if exists
+while [[ -z "$PUBLIC_HOST" && $TRIES -lt $MAX_TRIES ]]; do
+    sleep 3
+    # Extract only trycloudflare.com hostnames
+    PUBLIC_HOST=$(grep -oE '([a-z0-9\-]+\.trycloudflare\.com)' cloudflared.log | head -n1)
+    TRIES=$((TRIES+1))
+done
+
+if [[ -z "$PUBLIC_HOST" ]]; then
+    echo "❌ Could not detect Cloudflare public hostname"
+    exit 1
+fi
 
 echo ""
 echo "=========================================="
