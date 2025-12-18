@@ -1,0 +1,57 @@
+name: AviRDP
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 9999
+
+    steps:
+    - name: Download Ngrok v3
+      run: |
+        Write-Host "Downloading Ngrok v3..."
+        Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip -UseBasicParsing
+        Write-Host "Ngrok downloaded successfully!"
+
+    - name: Download Configuration Files
+      run: |
+        # Download and configure related files...
+
+    - name: Download Launcher Files
+      run: |
+        # Download launcher-related files...
+
+    - name: Extract Ngrok
+      run: |
+        # Extract Ngrok...
+
+    - name: Authenticate Ngrok Account
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+      run: |
+        # Authenticate Ngrok account...
+
+    - name: Enable RDP Access
+      run: |
+        # Enable RDP access...
+
+    - name: Create Ngrok Tunnel
+      run: |
+        # Create Ngrok tunnel...
+
+    - name: Wait for Ngrok API
+      run: |
+        # Wait for Ngrok API...
+
+    - name: Display RDP Connection Details
+      run: |
+        # Display RDP connection details...
+
+    - name: Connect to Your RDP
+      run: |
+        # Connect to RDP...
+
+    - name: Keep VM Running
+      run: |
+        # Keep VM running...
