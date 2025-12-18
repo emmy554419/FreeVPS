@@ -9,36 +9,55 @@ jobs:
 
     steps:
     - name: Enable RDP
+      shell: powershell
       run: |
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "UserAuthentication" -Value 1
 
     - name: Set runner password
+      shell: powershell
       run: |
         net user runneradmin P@ssw0rd123
 
     - name: Download Cloudflared
+      shell: powershell
       run: |
         Invoke-WebRequest `
           https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe `
           -OutFile cloudflared.exe
 
-    - name: Start Cloudflare Tunnel (HTTP)
+    - name: Start Cloudflare Tunnel and PRINT URL
+      shell: powershell
       run: |
-        Start-Process -NoNewWindow -FilePath .\cloudflared.exe `
-          -ArgumentList "tunnel --url http://localhost:80"
-    
-    - name: Show connection info
+        $log = "cloudflared.log"
+
+        Start-Process -FilePath .\cloudflared.exe `
+          -ArgumentList "tunnel --url http://localhost:80 --logfile $log --loglevel info" `
+          -NoNewWindow
+
+        Start-Sleep -Seconds 10
+
+        Write-Host ""
+        Write-Host "======================================"
+        Write-Host "CLOUDFLARED PUBLIC URL:"
+        Select-String -Path $log -Pattern "https://.*trycloudflare.com" | ForEach-Object {
+          Write-Host $_.Matches.Value
+        }
+        Write-Host "======================================"
+        Write-Host ""
+
+    - name: Show RDP Info
+      shell: powershell
       run: |
-        echo "====================================="
-        echo "RDP USER: runneradmin"
-        echo "RDP PASS: P@ssw0rd123"
-        echo "====================================="
-        echo "Cloudflare public link will appear ABOVE"
-        echo "Use it for Docker / Web apps"
-        echo "====================================="
+        Write-Host "======================================"
+        Write-Host "RDP USER : runneradmin"
+        Write-Host "RDP PASS : P@ssw0rd123"
+        Write-Host "======================================"
+        Write-Host "Use the Cloudflare URL ABOVE for web apps"
+        Write-Host "======================================"
 
     - name: Keep VM Alive
+      shell: powershell
       run: |
-        while ($true) { Start-Sleep -Seconds 60 }
+        while ($true) { Start-Sleep 60 }
