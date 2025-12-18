@@ -16,30 +16,33 @@ jobs:
         iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 
     - name: Install TightVNC
+      shell: powershell
       run: |
         choco install tightvnc -y
 
-    - name: Set VNC Password
+    - name: Start TightVNC Server
       shell: powershell
       run: |
-        $pass = "${{ secrets.VNC_PASSWORD }}"
-        if (-not $pass) { $pass = "password123" }
         & "C:\Program Files\TightVNC\tvnserver.exe" -controlservice -install
         & "C:\Program Files\TightVNC\tvnserver.exe" -controlservice -start
 
     - name: Install noVNC
+      shell: powershell
       run: |
         git clone https://github.com/novnc/noVNC.git C:\novnc
 
     - name: Start noVNC Web
+      shell: powershell
       run: |
         cd C:\novnc
-        python utils\websockify\run --web . 6080 localhost:5900
+        python utils\novnc_proxy --vnc localhost:5900 --listen 6080
 
     - name: Install Cloudflare Tunnel
+      shell: powershell
       run: |
         choco install cloudflared -y
 
     - name: Expose Web VM
+      shell: powershell
       run: |
         cloudflared tunnel --url http://localhost:6080
