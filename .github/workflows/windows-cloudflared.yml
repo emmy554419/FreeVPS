@@ -1,7 +1,7 @@
-name: Windows VM (Ngrok v3)
+name: Windows-Ngrok-RDP-v3
 
 on:
-  workflow_dispatch:
+  workflow_dispatch
 
 jobs:
   build:
@@ -14,51 +14,52 @@ jobs:
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
           -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path `
-          "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
           -Name "UserAuthentication" -Value 1
 
     - name: Set runner password
       run: |
         net user runneradmin P@ssw0rd123
 
-    - name: Download ngrok v3
+    - name: Download latest Ngrok v3
       run: |
-        Invoke-WebRequest `
-          https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip `
-          -OutFile ngrok.zip
+        Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
         Expand-Archive ngrok.zip
         Remove-Item ngrok.zip
 
-    - name: Authenticate ngrok
+    - name: Authenticate Ngrok
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
       run: |
         .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
 
-    - name: Start ngrok RDP tunnel (TCP 3389)
+    - name: Start Ngrok tunnels (RDP + HTTP)
       run: |
-        Start-Process -NoNewWindow `
-          -FilePath .\ngrok\ngrok.exe `
-          -ArgumentList "tcp 3389"
+        Start-Process -NoNewWindow -FilePath .\ngrok\ngrok.exe -ArgumentList "tcp 3389 --log=stdout"
+        Start-Process -NoNewWindow -FilePath .\ngrok\ngrok.exe -ArgumentList "http 80 --log=stdout"
 
-    - name: Start ngrok HTTP tunnel (Web / Docker)
+    - name: Wait for Ngrok API
       run: |
-        Start-Process -NoNewWindow `
-          -FilePath .\ngrok\ngrok.exe `
-          -ArgumentList "http 80"
+        $retry = 0
+        while ($retry -lt 15) {
+            try {
+                $tunnels = Invoke-RestMethod http://127.0.0.1:4040/api/tunnels
+                if ($tunnels.tunnels.Count -gt 0) { break }
+            } catch {}
+            Start-Sleep -Seconds 3
+            $retry++
+        }
 
-    - name: Connection Info
+    - name: Display Ngrok public URLs
       run: |
-        echo "===================================="
-        echo "RDP USER : runneradmin"
-        echo "RDP PASS : P@ssw0rd123"
-        echo ""
-        echo "Ngrok public URLs will appear ABOVE in the Actions logs"
-        echo "Use tcp.ngrok.io:<port> for RDP"
-        echo "Use https://xxxx.ngrok.io for Web / Docker apps"
-        echo "===================================="
+        $tunnels = Invoke-RestMethod http://127.0.0.1:4040/api/tunnels
+        Write-Host "====================================="
+        Write-Host "RDP USER : runneradmin"
+        Write-Host "RDP PASS : P@ssw0rd123"
+        Write-Host "Ngrok public URLs:"
+        $tunnels.tunnels | ForEach-Object { Write-Host "Name: $($_.name) | Public URL: $($_.public_url)" }
+        Write-Host "====================================="
 
-    - name: Keep VM Alive
+    - name: Keep VM alive
       run: |
         while ($true) { Start-Sleep -Seconds 60 }
