@@ -31,11 +31,16 @@ jobs:
       run: |
         git clone https://github.com/novnc/noVNC.git C:\novnc
 
-    - name: Start noVNC Web
+    - name: Install websockify (Python)
+      shell: powershell
+      run: |
+        pip install websockify
+
+    - name: Start noVNC Web (Windows-safe)
       shell: powershell
       run: |
         cd C:\novnc
-        python utils\novnc_proxy --vnc localhost:5900 --listen 6080
+        python -m websockify 6080 localhost:5900 --web .
 
     - name: Install Cloudflare Tunnel
       shell: powershell
