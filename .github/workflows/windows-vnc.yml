@@ -1,9 +1,8 @@
 #!/bin/bash
 # Free Ubuntu VS Code with Cloudflare Tunnel
 # Required secrets:
-#   NGROK_AUTH_TOKEN (optional if you use ngrok)
-#   LINUX_MACHINE_NAME (optional)
-#   LINUX_USER_PASSWORD (optional for creating password-protected runner)
+#   None (or optional: LINUX_MACHINE_NAME)
+#   Optional: LINUX_USER_PASSWORD if you want a password-protected runner
 
 set -e
 
