@@ -1,0 +1,48 @@
+#!/bin/bash
+# Free Ubuntu VS Code with Cloudflare Tunnel
+
+set -e
+
+USER="runner"
+
+echo "### Set hostname (optional) ###"
+if [[ -n "$LINUX_MACHINE_NAME" ]]; then
+  sudo hostname "$LINUX_MACHINE_NAME"
+fi
+
+echo "### Install code-server ###"
+curl -fsSL https://code-server.dev/install.sh | sh
+
+echo "### Start code-server on port 8080 (no auth) ###"
+nohup code-server --bind-addr 127.0.0.1:8080 --auth none > code-server.log 2>&1 &
+
+echo "### Install cloudflared ###"
+wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+chmod +x cloudflared-linux-amd64
+sudo mv cloudflared-linux-amd64 /usr/local/bin/cloudflared
+
+echo "### Start Cloudflare Tunnel for code-server ###"
+nohup cloudflared tunnel --url http://localhost:8080 > cloudflared.log 2>&1 &
+
+# Wait until tunnel prints a valid trycloudflare hostname
+TRIES=0
+MAX_TRIES=15
+PUBLIC_HOST=""
+
+while [[ -z "$PUBLIC_HOST" && $TRIES -lt $MAX_TRIES ]]; do
+    sleep 3
+    PUBLIC_HOST=$(grep -oE '([a-z0-9\-]+\.trycloudflare\.com)' cloudflared.log | head -n1)
+    TRIES=$((TRIES+1))
+done
+
+if [[ -z "$PUBLIC_HOST" ]]; then
+    echo "❌ Could not detect Cloudflare public hostname"
+    exit 1
+fi
+
+echo ""
+echo "=========================================="
+echo "🎯 VS CODE WEB ACCESS"
+echo "URL: https://$PUBLIC_HOST"
+echo "Open it in your browser to access VS Code"
+echo "=========================================="
