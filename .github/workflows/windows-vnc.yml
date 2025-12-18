@@ -1,0 +1,47 @@
+name: Windows Browser VM (noVNC)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+    - name: Set VNC Password
+      shell: powershell
+      run: |
+        $pass = "${{ secrets.VNC_PASSWORD }}"
+        if (-not $pass) { $pass = "password123" }
+        cmd /c "echo $pass | \"C:\Program Files\TightVNC\tvnserver.exe\" -controlservice -install"
+
+    - name: Install Chocolatey
+      run: |
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+    - name: Install TightVNC
+      run: |
+        choco install tightvnc -y
+
+    - name: Start VNC Server
+      run: |
+        net start tvnserver
+
+    - name: Install noVNC
+      run: |
+        git clone https://github.com/novnc/noVNC.git C:\novnc
+
+    - name: Start noVNC Web
+      run: |
+        cd C:\novnc
+        python utils\websockify\run --web . 6080 localhost:5900
+
+    - name: Install Cloudflare Tunnel
+      run: |
+        choco install cloudflared -y
+
+    - name: Expose Web VM
+      run: |
+        cloudflared tunnel --url http://localhost:6080
