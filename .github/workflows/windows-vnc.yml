@@ -1,66 +1,55 @@
-name: Keep Running VS Code Ubuntu
+#!/bin/bash
+# Free Ubuntu VS Code with Cloudflare Tunnel
+# Required secrets:
+#   NGROK_AUTH_TOKEN (optional if you use ngrok)
+#   LINUX_MACHINE_NAME (optional)
+#   LINUX_USER_PASSWORD (optional for creating password-protected runner)
 
-on:
-  workflow_dispatch:
+set -e
 
-jobs:
-  vscode:
-    runs-on: ubuntu-latest
-    timeout-minutes: 360  # max 6 hours
+USER="runner"
 
-    steps:
-    - name: Install dependencies
-      run: |
-        sudo apt update -y
-        sudo apt install -y wget curl unzip jq
+echo "### Set hostname (optional) ###"
+if [[ -n "$LINUX_MACHINE_NAME" ]]; then
+  sudo hostname "$LINUX_MACHINE_NAME"
+fi
 
-    - name: Install code-server
-      run: |
-        curl -fsSL https://code-server.dev/install.sh | sh
+echo "### Install code-server ###"
+curl -fsSL https://code-server.dev/install.sh | sh
 
-    - name: Start code-server
-      run: |
-        # Run code-server in background, no authentication
-        nohup code-server --bind-addr 127.0.0.1:8080 --auth none > code-server.log 2>&1 &
+echo "### Start code-server on port 8080 (no auth) ###"
+nohup code-server --bind-addr 127.0.0.1:8080 --auth none > code-server.log 2>&1 &
 
-    - name: Install ngrok
-      run: |
-        curl -s https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip -o ngrok.zip
-        unzip ngrok.zip
-        chmod +x ngrok
+echo "### Install cloudflared ###"
+wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+chmod +x cloudflared-linux-amd64
+sudo mv cloudflared-linux-amd64 /usr/local/bin/cloudflared
 
-    - name: Authenticate ngrok
-      env:
-        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-      run: |
-        ./ngrok authtoken $NGROK_AUTH_TOKEN
+echo "### Start Cloudflare Tunnel for code-server ###"
+nohup cloudflared tunnel --url http://localhost:8080 > cloudflared.log 2>&1 &
 
-    - name: Start ngrok tunnel and print URL continuously
-      run: |
-        # Start ngrok in background
-        nohup ./ngrok http 8080 --log=stdout > ngrok.log 2>&1 &
+# Wait until tunnel prints a valid trycloudflare hostname
+TRIES=0
+MAX_TRIES=15
+PUBLIC_HOST=""
 
-        echo "Waiting for ngrok to start..."
-        URL=""
-        # Retry until ngrok URL is available
-        for i in {1..15}; do
-          sleep 2
-          URL=$(curl --silent http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url' 2>/dev/null)
-          if [ ! -z "$URL" ] && [ "$URL" != "null" ]; then
-            echo "Ngrok URL: $URL"
-            break
-          fi
-        done
+while [[ -z "$PUBLIC_HOST" && $TRIES -lt $MAX_TRIES ]]; do
+    sleep 3
+    PUBLIC_HOST=$(grep -oE '([a-z0-9\-]+\.trycloudflare\.com)' cloudflared.log | head -n1)
+    TRIES=$((TRIES+1))
+done
 
-        if [ -z "$URL" ] || [ "$URL" == "null" ]; then
-          echo "Error: Ngrok URL not found!"
-        fi
+if [[ -z "$PUBLIC_HOST" ]]; then
+    echo "❌ Could not detect Cloudflare public hostname"
+    exit 1
+fi
 
-        # Keep printing URL continuously and keep runner alive
-        echo "Runner is now alive. Access VS Code at the printed ngrok URL."
-        while true; do
-          if [ ! -z "$URL" ]; then
-            echo "Ngrok URL: $URL"
-          fi
-          sleep 10
-        done
+echo ""
+echo "=========================================="
+echo "🎯 VS CODE WEB ACCESS"
+echo "URL: https://$PUBLIC_HOST"
+echo "Open it in your browser to access VS Code"
+echo "=========================================="
+
+echo "### Keeping runner alive for VS Code access ###"
+sleep infinity
