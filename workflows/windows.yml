@@ -20,28 +20,28 @@ jobs:
       run: |
         net user runneradmin P@ssw0rd123
 
-    - name: Download Cloudflared
+    - name: Download cloudflared
       shell: powershell
       run: |
         Invoke-WebRequest `
           https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe `
           -OutFile cloudflared.exe
 
-    - name: Start Cloudflare Tunnel and PRINT URL
+    - name: Start Cloudflare Tunnel
       shell: powershell
       run: |
-        $log = "cloudflared.log"
-
         Start-Process -FilePath .\cloudflared.exe `
-          -ArgumentList "tunnel --url http://localhost:80 --logfile $log --loglevel info" `
+          -ArgumentList "tunnel --url http://localhost:80 --logfile cloudflared.log --loglevel info" `
           -NoNewWindow
 
-        Start-Sleep -Seconds 10
-
+    - name: Extract Cloudflare URL
+      shell: powershell
+      run: |
+        Start-Sleep 10
         Write-Host ""
         Write-Host "======================================"
-        Write-Host "CLOUDFLARED PUBLIC URL:"
-        Select-String -Path $log -Pattern "https://.*trycloudflare.com" | ForEach-Object {
+        Write-Host "CLOUDFLARE PUBLIC URL:"
+        Get-Content cloudflared.log | Select-String "https://.*trycloudflare.com" | ForEach-Object {
           Write-Host $_.Matches.Value
         }
         Write-Host "======================================"
@@ -53,8 +53,6 @@ jobs:
         Write-Host "======================================"
         Write-Host "RDP USER : runneradmin"
         Write-Host "RDP PASS : P@ssw0rd123"
-        Write-Host "======================================"
-        Write-Host "Use the Cloudflare URL ABOVE for web apps"
         Write-Host "======================================"
 
     - name: Keep VM Alive
