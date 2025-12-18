@@ -9,14 +9,8 @@ jobs:
     timeout-minutes: 360
 
     steps:
-    - name: Set VNC Password
-      shell: powershell
-      run: |
-        $pass = "${{ secrets.VNC_PASSWORD }}"
-        if (-not $pass) { $pass = "password123" }
-        cmd /c "echo $pass | \"C:\Program Files\TightVNC\tvnserver.exe\" -controlservice -install"
-
     - name: Install Chocolatey
+      shell: powershell
       run: |
         Set-ExecutionPolicy Bypass -Scope Process -Force
         iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
@@ -25,9 +19,13 @@ jobs:
       run: |
         choco install tightvnc -y
 
-    - name: Start VNC Server
+    - name: Set VNC Password
+      shell: powershell
       run: |
-        net start tvnserver
+        $pass = "${{ secrets.VNC_PASSWORD }}"
+        if (-not $pass) { $pass = "password123" }
+        & "C:\Program Files\TightVNC\tvnserver.exe" -controlservice -install
+        & "C:\Program Files\TightVNC\tvnserver.exe" -controlservice -start
 
     - name: Install noVNC
       run: |
