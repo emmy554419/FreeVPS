@@ -1,0 +1,40 @@
+name: Windows VM (Cloudflared)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 9999
+
+    steps:
+    - name: Enable RDP
+      run: |
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+    - name: Set password
+      run: |
+        net user runneradmin P@ssw0rd123
+
+    - name: Download cloudflared
+      run: |
+        Invoke-WebRequest https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe -OutFile cloudflared.exe
+
+    - name: Start Cloudflare Tunnel
+      run: |
+        Start-Process -NoNewWindow -FilePath .\cloudflared.exe `
+          -ArgumentList "tunnel --url http://localhost:80"
+
+    - name: Info
+      run: |
+        echo ============================
+        echo USER: runneradmin
+        echo PASS: root
+        echo Look ABOVE for trycloudflare.com link
+        echo ============================
+
+    - name: Keep alive
+      run: |
+        while ($true) { Start-Sleep 60 }
