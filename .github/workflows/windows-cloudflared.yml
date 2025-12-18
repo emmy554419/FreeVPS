@@ -1,4 +1,4 @@
-name: Windows-Ngrok-RDP-v3
+name: Windows-Ngrok-RDP
 
 on:
   workflow_dispatch
@@ -33,33 +33,104 @@ jobs:
       run: |
         .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
 
-    - name: Start Ngrok tunnels (RDP + HTTP)
+    - name: Create Ngrok configuration file
       run: |
-        Start-Process -NoNewWindow -FilePath .\ngrok\ngrok.exe -ArgumentList "tcp 3389 --log=stdout"
-        Start-Process -NoNewWindow -FilePath .\ngrok\ngrok.exe -ArgumentList "http 80 --log=stdout"
+        $config = @"
+        version: 2
+        authtoken: ${{ secrets.NGROK_AUTH_TOKEN }}
+        tunnels:
+          rdp:
+            proto: tcp
+            addr: 3389
+          http:
+            proto: http
+            addr: 80
+        web_addr: 127.0.0.1:4040
+        "@
+        $config | Out-File -FilePath .\ngrok\ngrok.yml -Encoding utf8
 
-    - name: Wait for Ngrok API
+    - name: Start Ngrok with multiple tunnels
+      run: |
+        Start-Process -NoNewWindow -FilePath .\ngrok\ngrok.exe -ArgumentList "start --all --config=.\ngrok\ngrok.yml --log=stdout"
+
+    - name: Wait for Ngrok API to be ready
       run: |
         $retry = 0
-        while ($retry -lt 15) {
+        $maxRetries = 30
+        $tunnelsReady = $false
+        
+        Write-Host "Waiting for Ngrok tunnels to initialize..."
+        
+        while ($retry -lt $maxRetries) {
             try {
-                $tunnels = Invoke-RestMethod http://127.0.0.1:4040/api/tunnels
-                if ($tunnels.tunnels.Count -gt 0) { break }
-            } catch {}
-            Start-Sleep -Seconds 3
+                $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
+                
+                if ($response.tunnels -and $response.tunnels.Count -ge 2) {
+                    $tunnelsReady = $true
+                    Write-Host "Tunnels are ready!"
+                    break
+                }
+            } catch {
+                Write-Host "Attempt $($retry + 1): Ngrok API not ready yet..."
+            }
+            
+            Start-Sleep -Seconds 2
             $retry++
+        }
+        
+        if (-not $tunnelsReady) {
+            Write-Error "Failed to establish Ngrok tunnels after $maxRetries attempts"
+            exit 1
         }
 
     - name: Display Ngrok public URLs
       run: |
-        $tunnels = Invoke-RestMethod http://127.0.0.1:4040/api/tunnels
-        Write-Host "====================================="
-        Write-Host "RDP USER : runneradmin"
-        Write-Host "RDP PASS : P@ssw0rd123"
-        Write-Host "Ngrok public URLs:"
-        $tunnels.tunnels | ForEach-Object { Write-Host "Name: $($_.name) | Public URL: $($_.public_url)" }
-        Write-Host "====================================="
+        try {
+            $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
+            
+            Write-Host ""
+            Write-Host "========================================="
+            Write-Host "        RDP CONNECTION DETAILS"
+            Write-Host "========================================="
+            Write-Host ""
+            Write-Host "RDP USERNAME: runneradmin"
+            Write-Host "RDP PASSWORD: P@ssw0rd123"
+            Write-Host ""
+            Write-Host "NGROK PUBLIC URLS:"
+            Write-Host "-----------------------------------------"
+            
+            foreach ($tunnel in $tunnels.tunnels) {
+                $name = $tunnel.name
+                $url = $tunnel.public_url
+                $proto = $tunnel.proto
+                
+                Write-Host "[$proto] $name -> $url"
+                
+                # Extract RDP connection details if it's the TCP tunnel
+                if ($proto -eq "tcp") {
+                    $urlParts = $url -replace "tcp://", "" -split ":"
+                    if ($urlParts.Count -eq 2) {
+                        Write-Host ""
+                        Write-Host "RDP CONNECTION:"
+                        Write-Host "  Host: $($urlParts[0])"
+                        Write-Host "  Port: $($urlParts[1])"
+                        Write-Host ""
+                    }
+                }
+            }
+            
+            Write-Host "========================================="
+            Write-Host ""
+            
+        } catch {
+            Write-Error "Failed to retrieve tunnel information: $_"
+            exit 1
+        }
 
     - name: Keep VM alive
       run: |
-        while ($true) { Start-Sleep -Seconds 60 }
+        Write-Host "VM is now running. Connection details displayed above."
+        Write-Host "The workflow will continue running until manually cancelled or timeout."
+        while ($true) { 
+            Start-Sleep -Seconds 60 
+        }
