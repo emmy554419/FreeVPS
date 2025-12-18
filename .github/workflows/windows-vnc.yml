@@ -1,4 +1,4 @@
-name: VS Code Web via ngrok
+name: Keep Running VS Code Ubuntu
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
 jobs:
   vscode:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 360  # max 6 hours
 
     steps:
     - name: Install dependencies
@@ -20,7 +20,7 @@ jobs:
 
     - name: Start code-server
       run: |
-        # Run code-server in the background, no password
+        # Run code-server in background, no auth
         nohup code-server --bind-addr 127.0.0.1:8080 --auth none > code-server.log 2>&1 &
 
     - name: Install ngrok
@@ -37,12 +37,12 @@ jobs:
 
     - name: Start ngrok tunnel
       run: |
-        # Run ngrok in background
-        nohup ./ngrok http 8080 > ngrok.log 2>&1 &
+        nohup ./ngrok http 8080 --log=stdout > ngrok.log 2>&1 &
         sleep 5
         # Print public URL
         ./ngrok api tunnels | jq -r '.tunnels[0].public_url'
 
-    - name: Show instructions
+    - name: Keep Runner Alive
       run: |
-        echo "Open the printed ngrok URL in your browser to access VS Code!"
+        echo "Runner is now alive. Access VS Code at the printed ngrok URL."
+        sleep infinity
