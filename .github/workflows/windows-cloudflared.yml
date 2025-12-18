@@ -1,4 +1,4 @@
-name: Windows VM (Ngrok)
+name: Windows VM (Ngrok v3)
 
 on:
   workflow_dispatch:
@@ -22,10 +22,10 @@ jobs:
       run: |
         net user runneradmin P@ssw0rd123
 
-    - name: Download ngrok
+    - name: Download ngrok v3
       run: |
         Invoke-WebRequest `
-          https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-windows-amd64.zip `
+          https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip `
           -OutFile ngrok.zip
         Expand-Archive ngrok.zip
         Remove-Item ngrok.zip
@@ -54,9 +54,9 @@ jobs:
         echo "RDP USER : runneradmin"
         echo "RDP PASS : P@ssw0rd123"
         echo ""
-        echo "Ngrok links will appear ABOVE"
-        echo "Use tcp.ngrok.io for RDP"
-        echo "Use https://xxxx.ngrok.io for Web/Docker"
+        echo "Ngrok public URLs will appear ABOVE in the Actions logs"
+        echo "Use tcp.ngrok.io:<port> for RDP"
+        echo "Use https://xxxx.ngrok.io for Web / Docker apps"
         echo "===================================="
 
     - name: Keep VM Alive
