@@ -9,16 +9,17 @@ jobs:
     timeout-minutes: 360
 
     steps:
+    # ------------------------
     - name: Install Chocolatey
       shell: powershell
       run: |
         Set-ExecutionPolicy Bypass -Scope Process -Force
         iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 
+    # ------------------------
     - name: Install TightVNC
       shell: powershell
-      run: |
-        choco install tightvnc -y
+      run: choco install tightvnc -y
 
     - name: Start TightVNC Server
       shell: powershell
@@ -26,15 +27,14 @@ jobs:
         & "C:\Program Files\TightVNC\tvnserver.exe" -controlservice -install
         & "C:\Program Files\TightVNC\tvnserver.exe" -controlservice -start
 
+    # ------------------------
     - name: Install Python Websockify
       shell: powershell
-      run: |
-        pip install websockify
+      run: pip install websockify
 
     - name: Install noVNC
       shell: powershell
-      run: |
-        git clone https://github.com/novnc/noVNC.git C:\novnc
+      run: git clone https://github.com/novnc/noVNC.git C:\novnc
 
     - name: Start noVNC in Background
       shell: powershell
@@ -42,23 +42,32 @@ jobs:
         Start-Process python -ArgumentList "-m websockify 6080 localhost:5900 --web C:\novnc" -PassThru
         Start-Sleep -Seconds 10
 
+    # ------------------------
     - name: Install Ngrok
       shell: powershell
-      run: |
-        choco install ngrok -y
+      run: choco install ngrok -y
 
     - name: Authenticate Ngrok
       shell: powershell
-      run: |
-        ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+      run: ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
 
-    - name: Expose noVNC via Ngrok
+    - name: Start Ngrok Tunnel in Background
       shell: powershell
       run: |
-        Start-Process ngrok -ArgumentList "http 6080" -NoNewWindow
-        Start-Sleep -Seconds 10
+        Start-Process ngrok -ArgumentList "http 6080 --log=stdout" -PassThru
+        Start-Sleep -Seconds 15  # wait for tunnel to initialize
 
-    - name: Print Ngrok URL
+    - name: Print Ngrok Public URL
       shell: powershell
       run: |
-        ngrok api tunnels | ConvertFrom-Json | ForEach-Object { $_.public_url }
+        # Retry until the tunnel is available
+        for ($i=0; $i -lt 10; $i++) {
+          try {
+            $tunnels = ngrok api tunnels | ConvertFrom-Json
+            if ($tunnels.tunnels.Count -gt 0) {
+              $tunnels.tunnels | ForEach-Object { Write-Output $_.public_url }
+              break
+            }
+          } catch {}
+          Start-Sleep -Seconds 3
+        }
