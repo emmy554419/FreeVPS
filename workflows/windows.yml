@@ -33,16 +33,22 @@ jobs:
       run: |
         .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
 
-    - name: Start Ngrok RDP tunnel (TCP 3389)
+    - name: Start Ngrok tunnels (RDP + HTTP)
       run: |
-        Start-Process -NoNewWindow -FilePath .\ngrok\ngrok.exe -ArgumentList "tcp 3389"
+        Start-Process -NoNewWindow -FilePath .\ngrok\ngrok.exe -ArgumentList "tcp 3389 --log=stdout" 
+        Start-Process -NoNewWindow -FilePath .\ngrok\ngrok.exe -ArgumentList "http 80 --log=stdout"
 
-    - name: Start Ngrok HTTP tunnel (Docker / web apps)
+    - name: Wait for Ngrok API to be ready
       run: |
-        Start-Process -NoNewWindow -FilePath .\ngrok\ngrok.exe -ArgumentList "http 80"
-
-    - name: Wait for Ngrok to start
-      run: Start-Sleep -Seconds 5
+        $retry=0
+        while ($retry -lt 10) {
+            try {
+                $tunnels = Invoke-RestMethod http://127.0.0.1:4040/api/tunnels
+                if ($tunnels.tunnels.Count -gt 0) { break }
+            } catch {}
+            Start-Sleep -Seconds 3
+            $retry++
+        }
 
     - name: Display Ngrok public URLs
       run: |
