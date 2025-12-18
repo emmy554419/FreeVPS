@@ -1,7 +1,6 @@
-name: Windows-Ngrok-RDP
+name: AviRDP
 
-on:
-  workflow_dispatch
+on: workflow_dispatch
 
 jobs:
   build:
@@ -9,128 +8,251 @@ jobs:
     timeout-minutes: 9999
 
     steps:
-    - name: Enable RDP
+    - name: Download Ngrok v3
       run: |
-        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
-          -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
-          -Name "UserAuthentication" -Value 1
+        Write-Host "Downloading Ngrok v3..."
+        Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip -UseBasicParsing
+        Write-Host "Ngrok downloaded successfully!"
 
-    - name: Set runner password
+    - name: Download Configuration Files
       run: |
-        net user runneradmin P@ssw0rd123
+        Write-Host "Downloading configuration files..."
+        try {
+          Invoke-WebRequest https://raw.githubusercontent.com/avipatilpro/AviRDP/main/start.bat -OutFile start.bat -UseBasicParsing -ErrorAction SilentlyContinue
+        } catch {
+          Write-Host "start.bat not found, creating default..."
+          @'
+@echo off
+echo ==========================================
+echo    AviRDP - Windows RDP Connection
+echo ==========================================
+echo.
+echo Fetching connection details...
+timeout /t 5 /nobreak >nul
+curl -s http://127.0.0.1:4040/api/tunnels > tunnels.json
+echo.
+echo ==========================================
+echo Your RDP Connection is Ready!
+echo ==========================================
+powershell -Command "$data = Get-Content tunnels.json | ConvertFrom-Json; $tcp = $data.tunnels | Where-Object {$_.proto -eq 'tcp'}; if ($tcp) { $url = $tcp.public_url -replace 'tcp://', ''; Write-Host 'RDP Address: ' $url; Write-Host 'Username: runneradmin'; Write-Host 'Password: Check the workflow logs'; } else { Write-Host 'Waiting for tunnel...'; }"
+echo ==========================================
+'@ | Out-File -FilePath start.bat -Encoding ASCII
+        }
+        
+        try {
+          Invoke-WebRequest https://raw.githubusercontent.com/avipatilpro/AviRDP/main/wallpaper.png -OutFile wallpaper.png -UseBasicParsing -ErrorAction SilentlyContinue
+        } catch {
+          Write-Host "wallpaper.png not found, skipping..."
+        }
+        
+        try {
+          Invoke-WebRequest https://raw.githubusercontent.com/avipatilpro/AviRDP/main/wallpaper.bat -OutFile wallpaper.bat -UseBasicParsing -ErrorAction SilentlyContinue
+        } catch {
+          Write-Host "wallpaper.bat not found, creating default..."
+          @'
+@echo off
+reg add "HKEY_CURRENT_USER\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d "D:\a\wallpaper.png" /f
+RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
+'@ | Out-File -FilePath wallpaper.bat -Encoding ASCII
+        }
+        
+        try {
+          Invoke-WebRequest https://raw.githubusercontent.com/avipatilpro/AviRDP/main/loop.bat -OutFile loop.bat -UseBasicParsing -ErrorAction SilentlyContinue
+        } catch {
+          Write-Host "loop.bat not found, creating default..."
+          @'
+@echo off
+:loop
+echo VM is running... Press Ctrl+C to stop (this will end the workflow)
+timeout /t 60 /nobreak >nul
+goto loop
+'@ | Out-File -FilePath loop.bat -Encoding ASCII
+        }
+        
+        Write-Host "Configuration files ready!"
 
-    - name: Download latest Ngrok v3
+    - name: Download Launcher Files
       run: |
-        Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-        Expand-Archive ngrok.zip
-        Remove-Item ngrok.zip
+        Write-Host "Downloading launcher files..."
+        
+        New-Item -ItemType Directory -Force -Path "launcher" | Out-Null
+        
+        try {
+          Invoke-WebRequest https://raw.githubusercontent.com/avipatilpro/AviRDP/main/launcher/Node.js.lnk -OutFile "Node.js.lnk" -UseBasicParsing -ErrorAction SilentlyContinue
+        } catch {
+          Write-Host "Node.js.lnk not found, skipping..."
+        }
+        
+        try {
+          Invoke-WebRequest "https://raw.githubusercontent.com/avipatilpro/AviRDP/main/launcher/Visual%20Studio%202019.lnk" -OutFile "Visual Studio 2019.lnk" -UseBasicParsing -ErrorAction SilentlyContinue
+        } catch {
+          Write-Host "Visual Studio 2019.lnk not found, skipping..."
+        }
+        
+        try {
+          Invoke-WebRequest "https://github.com/avipatilpro/AviRDP/raw/main/launcher/Ganti%20Password.exe" -OutFile "Ganti Password.exe" -UseBasicParsing -ErrorAction SilentlyContinue
+        } catch {
+          Write-Host "Ganti Password.exe not found, skipping..."
+        }
+        
+        Write-Host "Launcher files processed!"
 
-    - name: Authenticate Ngrok
+    - name: Extract Ngrok
+      run: |
+        Write-Host "Extracting Ngrok..."
+        Expand-Archive ngrok.zip -Force
+        Write-Host "Ngrok extracted successfully!"
+
+    - name: Authenticate Ngrok Account
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
       run: |
+        Write-Host "Authenticating Ngrok..."
         .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "Ngrok authentication successful!"
+        } else {
+          Write-Error "Ngrok authentication failed!"
+          exit 1
+        }
 
-    - name: Create Ngrok configuration file
-      run: |
-        $config = @"
-        version: 2
-        authtoken: ${{ secrets.NGROK_AUTH_TOKEN }}
-        tunnels:
-          rdp:
-            proto: tcp
-            addr: 3389
-          http:
-            proto: http
-            addr: 80
-        web_addr: 127.0.0.1:4040
-        "@
-        $config | Out-File -FilePath .\ngrok\ngrok.yml -Encoding utf8
+    - name: Enable RDP Access
+      run: | 
+        Write-Host "Enabling RDP access..."
+        
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+        
+        Write-Host "RDP enabled successfully!"
+        
+        # Set password for runneradmin
+        Write-Host "Setting up user account..."
+        net user runneradmin AviRDP@2024
+        
+        Write-Host "Copying files to desktop..."
+        
+        # Copy wallpaper files if they exist
+        if (Test-Path wallpaper.png) {
+          Copy-Item wallpaper.png D:\a\wallpaper.png -Force
+          Write-Host "Wallpaper copied!"
+        }
+        
+        if (Test-Path wallpaper.bat) {
+          Copy-Item wallpaper.bat D:\a\wallpaper.bat -Force
+        }
+        
+        # Copy launcher files to desktop if they exist
+        if (Test-Path "Node.js.lnk") {
+          Copy-Item "Node.js.lnk" "C:\Users\Public\Desktop\Node.js.lnk" -Force
+        }
+        
+        if (Test-Path "Visual Studio 2019.lnk") {
+          Copy-Item "Visual Studio 2019.lnk" "C:\Users\Public\Desktop\Visual Studio 2019.lnk" -Force
+        }
+        
+        if (Test-Path "Ganti Password.exe") {
+          Copy-Item "Ganti Password.exe" "C:\Users\Public\Desktop\Ganti Password.exe" -Force
+        }
+        
+        # Apply wallpaper if bat file exists
+        if (Test-Path D:\a\wallpaper.bat) {
+          Start-Process -FilePath "D:\a\wallpaper.bat" -WindowStyle Hidden
+        }
+        
+        Write-Host "Desktop setup complete!"
 
-    - name: Start Ngrok with multiple tunnels
+    - name: Create Ngrok Tunnel
       run: |
-        Start-Process -NoNewWindow -FilePath .\ngrok\ngrok.exe -ArgumentList "start --all --config=.\ngrok\ngrok.yml --log=stdout"
+        Write-Host "Starting Ngrok tunnel..."
+        Start-Process PowerShell -ArgumentList '-NoExit -Command ".\ngrok\ngrok.exe tcp 3389 --region ap --log=stdout"' -WindowStyle Hidden
+        Write-Host "Ngrok tunnel started!"
 
-    - name: Wait for Ngrok API to be ready
+    - name: Wait for Ngrok API
       run: |
+        Write-Host "Waiting for Ngrok API to be ready..."
         $retry = 0
         $maxRetries = 30
-        $tunnelsReady = $false
-        
-        Write-Host "Waiting for Ngrok tunnels to initialize..."
         
         while ($retry -lt $maxRetries) {
             try {
                 $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
                 
-                if ($response.tunnels -and $response.tunnels.Count -ge 2) {
-                    $tunnelsReady = $true
-                    Write-Host "Tunnels are ready!"
+                if ($response.tunnels -and $response.tunnels.Count -gt 0) {
+                    Write-Host "Ngrok API is ready!"
                     break
                 }
             } catch {
-                Write-Host "Attempt $($retry + 1): Ngrok API not ready yet..."
+                Write-Host "Attempt $($retry + 1)/$maxRetries - Waiting for Ngrok..."
             }
             
             Start-Sleep -Seconds 2
             $retry++
         }
         
-        if (-not $tunnelsReady) {
-            Write-Error "Failed to establish Ngrok tunnels after $maxRetries attempts"
+        if ($retry -eq $maxRetries) {
+            Write-Error "Failed to connect to Ngrok API"
             exit 1
         }
 
-    - name: Display Ngrok public URLs
+    - name: Display RDP Connection Details
       run: |
+        Write-Host ""
+        Write-Host "=============================================="
+        Write-Host "      AVIRDP - CONNECTION DETAILS"
+        Write-Host "=============================================="
+        Write-Host ""
+        Write-Host "System Information:"
+        Write-Host "  CPU: 2 Cores"
+        Write-Host "  RAM: 7GB"
+        Write-Host "  Storage: 256GB SSD"
+        Write-Host ""
+        
         try {
             $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
+            $tcpTunnel = $tunnels.tunnels | Where-Object { $_.proto -eq "tcp" } | Select-Object -First 1
             
-            Write-Host ""
-            Write-Host "========================================="
-            Write-Host "        RDP CONNECTION DETAILS"
-            Write-Host "========================================="
-            Write-Host ""
-            Write-Host "RDP USERNAME: runneradmin"
-            Write-Host "RDP PASSWORD: P@ssw0rd123"
-            Write-Host ""
-            Write-Host "NGROK PUBLIC URLS:"
-            Write-Host "-----------------------------------------"
-            
-            foreach ($tunnel in $tunnels.tunnels) {
-                $name = $tunnel.name
-                $url = $tunnel.public_url
-                $proto = $tunnel.proto
+            if ($tcpTunnel) {
+                $publicUrl = $tcpTunnel.public_url -replace "tcp://", ""
+                $parts = $publicUrl -split ":"
                 
-                Write-Host "[$proto] $name -> $url"
-                
-                # Extract RDP connection details if it's the TCP tunnel
-                if ($proto -eq "tcp") {
-                    $urlParts = $url -replace "tcp://", "" -split ":"
-                    if ($urlParts.Count -eq 2) {
-                        Write-Host ""
-                        Write-Host "RDP CONNECTION:"
-                        Write-Host "  Host: $($urlParts[0])"
-                        Write-Host "  Port: $($urlParts[1])"
-                        Write-Host ""
-                    }
-                }
+                Write-Host "RDP Connection Details:"
+                Write-Host "  Host: $($parts[0])"
+                Write-Host "  Port: $($parts[1])"
+                Write-Host "  Username: runneradmin"
+                Write-Host "  Password: AviRDP@2024"
+                Write-Host ""
+                Write-Host "Full Address: $publicUrl"
+            } else {
+                Write-Host "Waiting for tunnel to establish..."
             }
-            
-            Write-Host "========================================="
-            Write-Host ""
-            
         } catch {
-            Write-Error "Failed to retrieve tunnel information: $_"
-            exit 1
+            Write-Host "Error retrieving tunnel info: $_"
+        }
+        
+        Write-Host ""
+        Write-Host "=============================================="
+        Write-Host ""
+
+    - name: Connect to Your RDP
+      run: |
+        if (Test-Path start.bat) {
+          cmd /c start.bat
+        } else {
+          Write-Host "Connection is ready! Use the details above to connect."
         }
 
-    - name: Keep VM alive
+    - name: Keep VM Running
       run: |
-        Write-Host "VM is now running. Connection details displayed above."
-        Write-Host "The workflow will continue running until manually cancelled or timeout."
-        while ($true) { 
-            Start-Sleep -Seconds 60 
+        Write-Host "VM is now running and ready for RDP connection!"
+        Write-Host "This workflow will continue until manually cancelled."
+        Write-Host ""
+        
+        if (Test-Path loop.bat) {
+          cmd /c loop.bat
+        } else {
+          while ($true) {
+            Write-Host "VM Status: Running - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+            Start-Sleep -Seconds 60
+          }
         }
