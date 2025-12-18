@@ -16,42 +16,86 @@ jobs:
 
     - name: Download Configuration Files
       run: |
-        # Download and configure related files...
+        Write-Host "Downloading configuration files..."
+        try {
+          Invoke-WebRequest https://raw.githubusercontent.com/avipatilpro/AviRDP/main/start.bat -OutFile start.bat -UseBasicParsing -ErrorAction SilentlyContinue
+        } catch {
+          Write-Host "start.bat not found, creating default..."
+          @'
+          @echo off
+          echo ==========================================
+          echo    AviRDP - Windows RDP Connection
+          echo ==========================================
+          echo.
+          echo Fetching connection details...
+          timeout /t 5 /nobreak >nul
+          curl -s http://127.0.0.1:4040/api/tunnels > tunnels.json
+          echo.
+          echo ==========================================
+          echo Your RDP Connection is Ready!
+          echo ==========================================
+          powershell -Command "$data = Get-Content tunnels.json | ConvertFrom-Json; $tcp = $data.tunnels | Where-Object {$_.proto -eq 'tcp'}; if ($tcp) { $url = $tcp.public_url -replace 'tcp://', ''; Write-Host 'RDP Address: ' $url; Write-Host 'Username: runneradmin'; Write-Host 'Password: Check the workflow logs'; } else { Write-Host 'Waiting for tunnel...'; }"
+          echo ==========================================
+          '@ | Out-File -FilePath start.bat -Encoding ASCII
+        }
 
     - name: Download Launcher Files
       run: |
-        # Download launcher-related files...
+        Write-Host "Downloading launcher files..."
+        New-Item -ItemType Directory -Force -Path "launcher" | Out-Null
+
+        try {
+          Invoke-WebRequest https://raw.githubusercontent.com/avipatilpro/AviRDP/main/launcher/Node.js.lnk -OutFile "Node.js.lnk" -UseBasicParsing -ErrorAction SilentlyContinue
+        } catch {
+          Write-Host "Node.js.lnk not found, skipping..."
+        }
 
     - name: Extract Ngrok
       run: |
-        # Extract Ngrok...
+        Write-Host "Extracting Ngrok..."
+        Expand-Archive ngrok.zip -Force -DestinationPath .\ngrok
+        Write-Host "Ngrok extracted successfully!"
 
     - name: Authenticate Ngrok Account
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
       run: |
-        # Authenticate Ngrok account...
+        Write-Host "Authenticating Ngrok..."
+        .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "Ngrok authentication successful!"
+        } else {
+          Write-Error "Ngrok authentication failed!"
+          exit 1
+        }
 
     - name: Enable RDP Access
       run: |
-        # Enable RDP access...
+        Write-Host "Enabling RDP access..."
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Write-Host "RDP enabled successfully!"
 
     - name: Create Ngrok Tunnel
       run: |
-        # Create Ngrok tunnel...
-
-    - name: Wait for Ngrok API
-      run: |
-        # Wait for Ngrok API...
+        Write-Host "Starting Ngrok tunnel..."
+        Start-Process PowerShell -ArgumentList '-NoExit -Command ".\ngrok\ngrok.exe tcp 3389 --region ap --log=stdout"' -WindowStyle Hidden
+        Write-Host "Ngrok tunnel started!"
 
     - name: Display RDP Connection Details
       run: |
-        # Display RDP connection details...
-
-    - name: Connect to Your RDP
-      run: |
-        # Connect to RDP...
+        Write-Host "=============================================="
+        Write-Host "      AVIRDP - CONNECTION DETAILS"
+        Write-Host "=============================================="
+        Write-Host "RDP Address: Please check workflow logs for details"
+        Write-Host "Username: runneradmin"
+        Write-Host "Password: AviRDP@2024"
+        Write-Host "=============================================="
 
     - name: Keep VM Running
       run: |
-        # Keep VM running...
+        Write-Host "VM is now running and ready for RDP connection!"
+        while ($true) {
+          Write-Host "VM Status: Running - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+          Start-Sleep -Seconds 60
+        }
