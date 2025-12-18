@@ -35,12 +35,19 @@ jobs:
       run: |
         ./ngrok authtoken $NGROK_AUTH_TOKEN
 
-    - name: Start ngrok tunnel
+    - name: Start ngrok tunnel and print URL
       run: |
+        # Start ngrok in background
         nohup ./ngrok http 8080 --log=stdout > ngrok.log 2>&1 &
-        sleep 5
-        # Print public URL
-        ./ngrok api tunnels | jq -r '.tunnels[0].public_url'
+        echo "Waiting for ngrok to start..."
+        for i in {1..15}; do
+          sleep 2
+          URL=$(curl --silent http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url' 2>/dev/null)
+          if [ ! -z "$URL" ] && [ "$URL" != "null" ]; then
+            echo "Ngrok URL: $URL"
+            break
+          fi
+        done
 
     - name: Keep Runner Alive
       run: |
